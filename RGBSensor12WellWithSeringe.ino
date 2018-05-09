@@ -190,8 +190,7 @@ void loop() {
   // buffer for bluetooth Data
   static uint8_t inputBuffer[LENGTH];
 
-  // mode = 1 impedance over time
-  // mode = 2 frequency sweep
+  // mode 
   byte mode = 0;
 
   //RCV buffer index pointer
@@ -200,16 +199,7 @@ void loop() {
   // bluetooth Serail buffer index pointer
   static uint8_t iInputBuffer = 0;
 
-  uint8_t electrode;
-
   static long lastRXTime = millis();
-
-  // use union to convert byte array to uint32_t
-  union fourByte {
-    uint32_t dataFrequency;
-    uint8_t dataByte[4];
-  };
-  union fourByte dataVal;
 
   // if more than 1000
   //  milliseconds has elapsed since last receive
@@ -265,12 +255,12 @@ void loop() {
 
   switch (mode) {
   case 66: //For beginning the stream (ASCII B)
-    testrunning = 1;
+    testrunning = true;
     mode = 0;
     break;
 
   case 83: // For stopping the stream (ASCII S)
-    testrunning = 0;
+    testrunning = false;
     mode = 0;
     break;
 
