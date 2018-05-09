@@ -1,5 +1,7 @@
 #ifndef SENSOR_H
 #define SENSOR_H
+#include "Settings.h"
+
 class Sensor{
     public:
         Sensor(char _name);
