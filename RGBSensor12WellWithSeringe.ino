@@ -1,32 +1,5 @@
-#include <SPI.h>
-#include <Arduino.h>
-#include "LTC2484.h"
-#include "LTC24XX_general.h"
-#include <SoftwareSerial.h>
-#include <SparkFunBLEMate2.h>
-#define REPEATS 1
-#define LENGTH 25
-#define ELENO 8
-#define TIME_LIMIT 120000
-
-#define Enable A0
-#define in1 A1
-#define in2 A2
-#define Limit1 A3
-#define Limit2 A4
-#define PWM 160
-
-#define MUX1 28
-#define MUX2 29
-#define MUX3 30
-#define CH0  27
-#define CH1  26
-#define CH2  24
-#define CH3  25
-#define CSR  7
-#define CSG  6
-#define CSB  5
-
+#include "Sensor.h"
+#include "Settings.h"
 
 int32_t rawadcvalue, rawadcvaluepart1;
 int32_t purgevalue;
@@ -36,9 +9,11 @@ char message[LENGTH];
 
 int bluetoothTx = A11;
 int bluetoothRx = A12;
-int testrunning;
+bool testrunning;
 SoftwareSerial bluetoothSerial(bluetoothTx, bluetoothRx);
 BLEMate2 BTModu(&bluetoothSerial);
+
+Sensor sensors[12];
 
 void setup() {
   // We initialize serial communication, setup the SPI pins and lighting/power pins as outputs, and initialize the lights to OFF
@@ -46,65 +21,14 @@ void setup() {
   bluetoothSerial.begin(9600);
   
   //Pins that go to the light detector
-  pinMode(CSR, OUTPUT);
-  pinMode(CSG, OUTPUT);
-  pinMode(CSB, OUTPUT);
+  initializeLightDetectorPins();
 
-  pinMode(CH0, OUTPUT);
-  pinMode(CH1, OUTPUT);
-  pinMode(CH2, OUTPUT);
-  pinMode(CH3, OUTPUT);
-  pinMode(MUX1, OUTPUT);
-  pinMode(MUX2, OUTPUT);
-  pinMode(MUX3, OUTPUT);
+  // Pins that go to the pump and other stuffskis?
+  initializeOtherPins();
 
-  // Pins that go to the pump?
-  pinMode(34, OUTPUT);
-  pinMode(35, OUTPUT);
-  pinMode(36, OUTPUT);
-  pinMode(37, OUTPUT);
-  pinMode(38, OUTPUT);
-  pinMode(39, OUTPUT);
-  pinMode(40, OUTPUT);
-  pinMode(41, OUTPUT);
-  pinMode(42, OUTPUT);
-  pinMode(43, OUTPUT);
-  pinMode(44, OUTPUT);
-  pinMode(45, OUTPUT);
-  pinMode(46, OUTPUT);
+  SPI.beginTransaction(SPISettings(4000000, MSBFIRST, SPI_MODE0));
 
-  SPI.setDataMode(SPI_MODE0);
-  SPI.setClockDivider(SPI_CLOCK_DIV128);
-  SPI.setBitOrder(MSBFIRST);
-
-  digitalWrite(CSR, HIGH);
-  digitalWrite(CSG, HIGH);
-  digitalWrite(CSB, HIGH);
-
-  digitalWrite(CH0, HIGH);
-  digitalWrite(CH1, HIGH);
-  digitalWrite(CH2, LOW);
-  digitalWrite(CH3, HIGH);
-
-  digitalWrite(MUX1, HIGH);
-  digitalWrite(MUX2, HIGH);
-  digitalWrite(MUX3, HIGH);
-
-  digitalWrite(34, LOW);
-  digitalWrite(35, LOW);
-  digitalWrite(36, LOW);
-  digitalWrite(37, LOW);
-  digitalWrite(38, LOW);
-  digitalWrite(39, LOW);
-  digitalWrite(40, LOW);
-  digitalWrite(41, LOW);
-  digitalWrite(42, LOW);
-  digitalWrite(43, LOW);
-  digitalWrite(44, LOW);
-  digitalWrite(45, LOW);
-  digitalWrite(46, LOW);
-
-  testrunning = 0;
+  testrunning = false;
 
   pinMode(Enable, OUTPUT);
   pinMode(in1, OUTPUT);
@@ -125,12 +49,303 @@ void setup() {
 
 
 void loop() {
-    
+
+  if (testrunning) {
+    Serial.println("Starting Test");
+    // ##################################
+    // Well 1
+    // ##################################
+    delay(50);
+
+    digitalWrite(24, HIGH);
+    digitalWrite(25, LOW);
+    digitalWrite(26, HIGH);
+    digitalWrite(27, LOW);
+
+    digitalWrite(36, HIGH);
+    digitalWrite(30, LOW);
+    delay(3);
+    SPI.begin();
+    LTC2484_read(5, 0x80, &rawadcvalue);
+    SPI.end();
+    delay(50);
+    digitalWrite(30, HIGH);
+
+    SPI.begin();
+    LTC2484_read(5, 0x80, &purgevalue);
+    SPI.end();
+
+    rawadcvaluepart1 = (rawadcvalue & 0x1fffffe0);
+
+    processedadcvalue = (uint32_t)rawadcvaluepart1;
+
+    processedadcvalue = processedadcvalue >> 5;
+
+    Serial.print("RED 1: ");
+    Serial.print("    ");
+    Serial.println(processedadcvalue, DEC);
+
+    message[0] = 'R';
+    message[1] = 'a';
+    message[2] = ',';
+    dtostrf(processedadcvalue, sizeof(processedadcvalue), 0, &message[3]);
+    Serial.println(message);
+    BTModu.sendData(message);
+    memset(&message[0], 0, sizeof(message));
+
+    delay(50);
+
+    rawadcvalue = 0;
+    processedadcvalue = 0;
+
+    delay(50);
+
+    digitalWrite(24, HIGH);
+    digitalWrite(25, LOW);
+    digitalWrite(26, HIGH);
+    digitalWrite(27, HIGH);
+
+    digitalWrite(30, LOW);
+    delay(3);
+    SPI.begin();
+    LTC2484_read(5, 0x80, &rawadcvalue);
+    SPI.end();
+    delay(50);
+    digitalWrite(30, HIGH);
+
+    SPI.begin();
+    LTC2484_read(5, 0x80, &purgevalue);
+    SPI.end();
+
+    rawadcvaluepart1 = (rawadcvalue & 0x1fffffe0);
+
+    processedadcvalue = (uint32_t)rawadcvaluepart1;
+
+    processedadcvalue = processedadcvalue >> 5;
+
+    Serial.print("GREEN 1: ");
+    Serial.print("    ");
+    Serial.println(processedadcvalue, DEC);
+
+    message[0] = 'G';
+    message[1] = 'a';
+    message[2] = ',';
+    dtostrf(processedadcvalue, sizeof(processedadcvalue), 0, &message[3]);
+    Serial.println(message);
+    BTModu.sendData(message);
+    memset(&message[0], 0, sizeof(message));
+
+    delay(50);
+
+    rawadcvalue = 0;
+    processedadcvalue = 0;
+
+    delay(50);
+
+    digitalWrite(24, LOW);
+    digitalWrite(25, LOW);
+    digitalWrite(26, HIGH);
+    digitalWrite(27, LOW);
+
+    digitalWrite(30, LOW);
+    delay(3);
+    SPI.begin();
+    LTC2484_read(5, 0x80, &rawadcvalue);
+    SPI.end();
+    delay(50);
+    digitalWrite(30, HIGH);
+    digitalWrite(36, LOW);
+
+    SPI.begin();
+    LTC2484_read(5, 0x80, &purgevalue);
+    SPI.end();
+
+    rawadcvaluepart1 = (rawadcvalue & 0x1fffffe0);
+
+    processedadcvalue = (uint32_t)rawadcvaluepart1;
+
+    processedadcvalue = processedadcvalue >> 5;
+
+    Serial.print("BLUE 1: ");
+    Serial.print("    ");
+    Serial.println(processedadcvalue, DEC);
+    Serial.println("    ");
+
+    message[0] = 'B';
+    message[1] = 'a';
+    message[2] = ',';
+    dtostrf(processedadcvalue, sizeof(processedadcvalue), 0, &message[3]);
+    Serial.println(message);
+    BTModu.sendData(message);
+    memset(&message[0], 0, sizeof(message));
+
+    delay(50);
+
+    rawadcvalue = 0;
+    processedadcvalue = 0;
+  }
+  // buffer for RCV data
+  static uint8_t fullBufferByte[LENGTH];
+
+  // buffer for bluetooth Data
+  static uint8_t inputBuffer[LENGTH];
+
+  // mode = 1 impedance over time
+  // mode = 2 frequency sweep
+  byte mode = 0;
+
+  //RCV buffer index pointer
+  static uint8_t iFullBuffer = 0;
+
+  // bluetooth Serail buffer index pointer
+  static uint8_t iInputBuffer = 0;
+
+  uint8_t electrode;
+
+  static long lastRXTime = millis();
+
+  // use union to convert byte array to uint32_t
+  union fourByte {
+    uint32_t dataFrequency;
+    uint8_t dataByte[4];
+  };
+  union fourByte dataVal;
+
+  // if more than 1000
+  //  milliseconds has elapsed since last receive
+  // parse the command from Iphone apps
+
+  if (lastRXTime + 1000 < millis()) {
+    // there is data in the RCV buffer
+    if (iFullBuffer != 0) {
+
+      // first byte is the mode
+      Serial.print("byte buffer:");
+      Serial.println(fullBufferByte[0], DEC);
+      mode = fullBufferByte[0];
+
+      iFullBuffer = 0;
+    }
+  }
+
+  iInputBuffer = 0;
+  // read data from bluetooth
+  while (bluetoothSerial.available() > 0) {
+    inputBuffer[iInputBuffer] = (uint8_t)bluetoothSerial.read();
+    iInputBuffer++;
+    lastRXTime = millis();
+  }
+
+  // check to see if the string
+  // and data looks like this:
+  // RCV=20 char max msg\n\r
+
+  // if yes copy it to fullBufferByte array
+
+  if (strncmp((char *)&inputBuffer[iInputBuffer - 2], "\n\r", 2) == 0) {
+
+    if (strncmp((char *)&inputBuffer[0], "RCV=", 4) == 0) {
+      Serial.println("This is a RCV");
+
+      // copy to RCV buffer
+      uint8_t i;
+      i = 4;
+      iInputBuffer = iInputBuffer - 2;
+      while (i < iInputBuffer) {
+        fullBufferByte[iFullBuffer] = inputBuffer[i];
+        iFullBuffer++;
+        i++;
+      }
+      iInputBuffer = 0;
+    }
+    else {
+      iInputBuffer = 0;
+    }
+  }
+
+  switch (mode) {
+  case 66: //For beginning the stream (ASCII B)
+    testrunning = 1;
+    mode = 0;
+    break;
+
+  case 83: // For stopping the stream (ASCII S)
+    testrunning = 0;
+    mode = 0;
+    break;
+
+  case 77: // For retracting the syringe pump (ASCII M)
+    RETRACT();
+    break;
+
+  case 79: //For returning the syringe pump (ASCII O)
+    RETURN();
+    break;
+
+  default:
+    break;
+  }
+  delay(100);
 }
 
+void initializeLightDetectorPins() {
+  pinMode(CSR, OUTPUT);
+  pinMode(CSG, OUTPUT);
+  pinMode(CSB, OUTPUT);
 
-void setupBluetooth()
-{
+  pinMode(CH0, OUTPUT);
+  pinMode(CH1, OUTPUT);
+  pinMode(CH2, OUTPUT);
+  pinMode(CH3, OUTPUT);
+  pinMode(MUX1, OUTPUT);
+  pinMode(MUX2, OUTPUT);
+  pinMode(MUX3, OUTPUT);
+
+  digitalWrite(CSR, HIGH);
+  digitalWrite(CSG, HIGH);
+  digitalWrite(CSB, HIGH);
+
+  digitalWrite(CH0, HIGH);
+  digitalWrite(CH1, HIGH);
+  digitalWrite(CH2, LOW);
+  digitalWrite(CH3, HIGH);
+
+  digitalWrite(MUX1, HIGH);
+  digitalWrite(MUX2, HIGH);
+  digitalWrite(MUX3, HIGH);
+}
+
+void initializeOtherPins() {
+  pinMode(34, OUTPUT);
+  pinMode(35, OUTPUT);
+  pinMode(36, OUTPUT);
+  pinMode(37, OUTPUT);
+  pinMode(38, OUTPUT);
+  pinMode(39, OUTPUT);
+  pinMode(40, OUTPUT);
+  pinMode(41, OUTPUT);
+  pinMode(42, OUTPUT);
+  pinMode(43, OUTPUT);
+  pinMode(44, OUTPUT);
+  pinMode(45, OUTPUT);
+  pinMode(46, OUTPUT);
+
+  digitalWrite(34, LOW);
+  digitalWrite(35, LOW);
+  digitalWrite(36, LOW);
+  digitalWrite(37, LOW);
+  digitalWrite(38, LOW);
+  digitalWrite(39, LOW);
+  digitalWrite(40, LOW);
+  digitalWrite(41, LOW);
+  digitalWrite(42, LOW);
+  digitalWrite(43, LOW);
+  digitalWrite(44, LOW);
+  digitalWrite(45, LOW);
+  digitalWrite(46, LOW);
+}
+
+void setupBluetooth() {
   // Regarding function return values: most functions that interact with the
   //  BC118 will return BLEMate2::opResult values. The possible values here
   //  are:
@@ -238,6 +453,6 @@ void RETURN() {//returns to original position
     Serial.println("Returning");
    }
   digitalWrite(in1, LOW);
-Serial.println("Returned");
+  Serial.println("Returned");
 }
 
