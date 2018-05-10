@@ -1,15 +1,9 @@
 #include "Sensor.h"
 #include "Settings.h"
 
-int32_t rawadcvalue, rawadcvaluepart1;
-int32_t purgevalue;
-uint32_t processedadcvalue;
-
-char message[LENGTH];
-
 int bluetoothTx = A11;
 int bluetoothRx = A12;
-bool testrunning;
+bool runSensors;
 SoftwareSerial bluetoothSerial(bluetoothTx, bluetoothRx);
 BLEMate2 BTModu(&bluetoothSerial);
 
@@ -20,38 +14,28 @@ void setup() {
   Serial.begin(9600);
   bluetoothSerial.begin(9600);
   
-  //Pins that go to the light detector
-  initializeLightDetectorPins();
+  // Process to setup the pins that go to the light detector
+  setupLightDetectorPins();
 
-  // Pins that go to the pump and other stuffskis?
-  initializeOtherPins();
+  // Process to setup the pins that control the lights
+  setupLightPins();
 
+  // Process to setup the pump
+  setupPump();
+
+  // Process to setup bluetooth
+  setupBluetooth();
+  
+  // initialize the SPI
   SPI.beginTransaction(SPISettings(4000000, MSBFIRST, SPI_MODE0));
 
-  testrunning = false;
-
-  pinMode(Enable, OUTPUT);
-  pinMode(in1, OUTPUT);
-  pinMode(in2, OUTPUT);
-  pinMode(Limit1, INPUT);
-  pinMode(Limit2, INPUT);
-
-  while(digitalRead(Limit1) == HIGH && millis()<=10000) { 
-    digitalWrite(in1, HIGH);
-    analogWrite(Enable, PWM);
-    Serial.println("setting");
-  }
-  digitalWrite(in1, LOW);
-  Serial.println("set");
-
-  setupBluetooth();
+  runSensors = false;
 }
-
 
 void loop() {
 
-  if (testrunning) {
-    Serial.println("Starting Test");
+  if (runSensors) { // Should eventually become while loop with a check to see if runSensors becomes false
+    Serial.println("Running Sensors");
     // ##################################
     // Well 1
     // ##################################
@@ -71,15 +55,13 @@ void loop() {
     delay(50);
     digitalWrite(30, HIGH);
 
+    // Clear the ADC????
     SPI.begin();
     LTC2484_read(5, 0x80, &purgevalue);
     SPI.end();
 
-    rawadcvaluepart1 = (rawadcvalue & 0x1fffffe0);
-
-    processedadcvalue = (uint32_t)rawadcvaluepart1;
-
-    processedadcvalue = processedadcvalue >> 5;
+    processedadcvalue = (uint32_t)(rawadcvalue & 0x1fffffe0);
+    processedadcvalue = processedadcvalue >> 5; // Might be shifting it to the left one too many bits (>> 4)
 
     Serial.print("RED 1: ");
     Serial.print("    ");
@@ -184,101 +166,12 @@ void loop() {
     rawadcvalue = 0;
     processedadcvalue = 0;
   }
-  // buffer for RCV data
-  static uint8_t fullBufferByte[LENGTH];
 
-  // buffer for bluetooth Data
-  static uint8_t inputBuffer[LENGTH];
-
-  // mode 
-  byte mode = 0;
-
-  //RCV buffer index pointer
-  static uint8_t iFullBuffer = 0;
-
-  // bluetooth Serail buffer index pointer
-  static uint8_t iInputBuffer = 0;
-
-  static long lastRXTime = millis();
-
-  // if more than 1000
-  //  milliseconds has elapsed since last receive
-  // parse the command from Iphone apps
-
-  if (lastRXTime + 1000 < millis()) {
-    // there is data in the RCV buffer
-    if (iFullBuffer != 0) {
-
-      // first byte is the mode
-      Serial.print("byte buffer:");
-      Serial.println(fullBufferByte[0], DEC);
-      mode = fullBufferByte[0];
-
-      iFullBuffer = 0;
-    }
-  }
-
-  iInputBuffer = 0;
-  // read data from bluetooth
-  while (bluetoothSerial.available() > 0) {
-    inputBuffer[iInputBuffer] = (uint8_t)bluetoothSerial.read();
-    iInputBuffer++;
-    lastRXTime = millis();
-  }
-
-  // check to see if the string
-  // and data looks like this:
-  // RCV=20 char max msg\n\r
-
-  // if yes copy it to fullBufferByte array
-
-  if (strncmp((char *)&inputBuffer[iInputBuffer - 2], "\n\r", 2) == 0) {
-
-    if (strncmp((char *)&inputBuffer[0], "RCV=", 4) == 0) {
-      Serial.println("This is a RCV");
-
-      // copy to RCV buffer
-      uint8_t i;
-      i = 4;
-      iInputBuffer = iInputBuffer - 2;
-      while (i < iInputBuffer) {
-        fullBufferByte[iFullBuffer] = inputBuffer[i];
-        iFullBuffer++;
-        i++;
-      }
-      iInputBuffer = 0;
-    }
-    else {
-      iInputBuffer = 0;
-    }
-  }
-
-  switch (mode) {
-  case 66: //For beginning the stream (ASCII B)
-    testrunning = true;
-    mode = 0;
-    break;
-
-  case 83: // For stopping the stream (ASCII S)
-    testrunning = false;
-    mode = 0;
-    break;
-
-  case 77: // For retracting the syringe pump (ASCII M)
-    RETRACT();
-    break;
-
-  case 79: //For returning the syringe pump (ASCII O)
-    RETURN();
-    break;
-
-  default:
-    break;
-  }
-  delay(100);
+  processReceivedData();
+  chooseMode();  
 }
 
-void initializeLightDetectorPins() {
+void setupLightDetectorPins() {
   pinMode(CSR, OUTPUT);
   pinMode(CSG, OUTPUT);
   pinMode(CSB, OUTPUT);
@@ -305,34 +198,49 @@ void initializeLightDetectorPins() {
   digitalWrite(MUX3, HIGH);
 }
 
-void initializeOtherPins() {
-  pinMode(34, OUTPUT);
-  pinMode(35, OUTPUT);
-  pinMode(36, OUTPUT);
-  pinMode(37, OUTPUT);
-  pinMode(38, OUTPUT);
-  pinMode(39, OUTPUT);
-  pinMode(40, OUTPUT);
-  pinMode(41, OUTPUT);
-  pinMode(42, OUTPUT);
-  pinMode(43, OUTPUT);
-  pinMode(44, OUTPUT);
-  pinMode(45, OUTPUT);
-  pinMode(46, OUTPUT);
+void setupLightPins() {
+  pinMode(LED0, OUTPUT);
+  pinMode(LED1, OUTPUT);
+  pinMode(LED2, OUTPUT);
+  pinMode(LED3, OUTPUT);
+  pinMode(LED4, OUTPUT);
+  pinMode(LED5, OUTPUT);
+  pinMode(LED6, OUTPUT);
+  pinMode(LED7, OUTPUT);
+  pinMode(LED8, OUTPUT);
+  pinMode(LED9, OUTPUT);
+  pinMode(LED10, OUTPUT);
+  pinMode(LED11, OUTPUT);
 
-  digitalWrite(34, LOW);
-  digitalWrite(35, LOW);
-  digitalWrite(36, LOW);
-  digitalWrite(37, LOW);
-  digitalWrite(38, LOW);
-  digitalWrite(39, LOW);
-  digitalWrite(40, LOW);
-  digitalWrite(41, LOW);
-  digitalWrite(42, LOW);
-  digitalWrite(43, LOW);
-  digitalWrite(44, LOW);
-  digitalWrite(45, LOW);
-  digitalWrite(46, LOW);
+  digitalWrite(LED0, LOW);
+  digitalWrite(LED1, LOW);
+  digitalWrite(LED2, LOW);
+  digitalWrite(LED3, LOW);
+  digitalWrite(LED4, LOW);
+  digitalWrite(LED5, LOW);
+  digitalWrite(LED6, LOW);
+  digitalWrite(LED7, LOW);
+  digitalWrite(LED8, LOW);
+  digitalWrite(LED9, LOW);
+  digitalWrite(LED10, LOW);
+  digitalWrite(LED11, LOW);
+}
+
+void setupPump() {
+  pinMode(Enable, OUTPUT);
+  pinMode(in1, OUTPUT);
+  pinMode(in2, OUTPUT);
+  pinMode(Limit1, INPUT);
+  pinMode(Limit2, INPUT);
+
+  while (digitalRead(Limit1) == HIGH && millis() <= 10000)
+  {
+    digitalWrite(in1, HIGH);
+    analogWrite(Enable, PWM);
+    Serial.println("setting");
+  }
+  digitalWrite(in1, LOW);
+  Serial.println("set");
 }
 
 void setupBluetooth() {
@@ -426,7 +334,7 @@ void setupBluetooth() {
   // We're set up to allow anything to connect to us now.
 }
 
-void RETRACT() {//syringe makes a vacuum 
+void RETRACT() {// syringe makes a vacuum to pull water
   while(digitalRead(Limit2) == HIGH){
   digitalWrite(in2, HIGH);
   analogWrite(Enable, PWM);
@@ -436,7 +344,7 @@ void RETRACT() {//syringe makes a vacuum
   Serial.println("Retracted");
 }
 
-void RETURN() {//returns to original position
+void RETURN() {// syringe returns to original position
    while(digitalRead(Limit1)== HIGH){
   digitalWrite(in1, HIGH);
   analogWrite(Enable, PWM);
@@ -444,5 +352,106 @@ void RETURN() {//returns to original position
    }
   digitalWrite(in1, LOW);
   Serial.println("Returned");
+}
+
+void processReceivedData() {
+  // buffer for RCV data
+  static uint8_t fullBufferByte[LENGTH];
+
+  // buffer for bluetooth Data
+  static uint8_t inputBuffer[LENGTH];
+
+  //RCV buffer index pointer
+  static uint8_t iFullBuffer = 0;
+
+  // bluetooth Serail buffer index pointer
+  static uint8_t iInputBuffer = 0;
+
+  static long lastRXTime = millis();
+
+  // if more than 1000
+  // milliseconds has elapsed since last receive
+  // parse the command from Iphone apps
+
+  if (lastRXTime + 1000 < millis())
+  {
+    // if there is data in the RCV buffer
+    if (iFullBuffer != 0)
+    {
+      // first byte is the mode
+      Serial.print("byte buffer:");
+      Serial.println(fullBufferByte[0], DEC);
+      mode = fullBufferByte[0];
+
+      iFullBuffer = 0;
+    }
+  }
+
+  iInputBuffer = 0;
+  // read data from bluetooth
+  while (bluetoothSerial.available() > 0)
+  {
+    inputBuffer[iInputBuffer] = (uint8_t)bluetoothSerial.read();
+    iInputBuffer++;
+    lastRXTime = millis();
+  }
+
+  // check to see if the string
+  // and data looks like this:
+  // RCV=20 char max msg\n\r
+
+  // if yes copy it to fullBufferByte array
+
+  if (strncmp((char *)&inputBuffer[iInputBuffer - 2], "\n\r", 2) == 0)
+  {
+
+    if (strncmp((char *)&inputBuffer[0], "RCV=", 4) == 0)
+    {
+      Serial.println("This is a RCV");
+
+      // copy to RCV buffer
+      uint8_t i;
+      i = 4;
+      iInputBuffer = iInputBuffer - 2;
+      while (i < iInputBuffer)
+      {
+        fullBufferByte[iFullBuffer] = inputBuffer[i];
+        iFullBuffer++;
+        i++;
+      }
+      iInputBuffer = 0;
+    }
+    else
+    {
+      iInputBuffer = 0;
+    }
+  }
+}
+
+void chooseMode() {
+  switch (mode)
+  {
+  case 66: // For beginning the stream (ASCII B)
+    runSensors = true;
+    mode = 0;
+    break;
+
+  case 83: // For stopping the stream (ASCII S)
+    runSensors = false;
+    mode = 0;
+    break;
+
+  case 77: // For retracting the syringe pump (ASCII M)
+    RETRACT();
+    break;
+
+  case 79: // For returning the syringe pump (ASCII O)
+    RETURN();
+    break;
+
+  default:
+    break;
+  }
+  //delay(100);
 }
 
