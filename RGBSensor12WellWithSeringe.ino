@@ -29,144 +29,19 @@ void setup() {
   // initialize the SPI
   SPI.beginTransaction(SPISettings(4000000, MSBFIRST, SPI_MODE0));
 
+  // Process to setup the sensors
+  setupSensors();
+
   runSensors = false;
 }
 
 void loop() {
-
   if (runSensors) { // Should eventually become while loop with a check to see if runSensors becomes false
     Serial.println("Running Sensors");
-    // ##################################
-    // Well 1
-    // ##################################
-    delay(50);
-
-    digitalWrite(24, HIGH);
-    digitalWrite(25, LOW);
-    digitalWrite(26, HIGH);
-    digitalWrite(27, LOW);
-
-    digitalWrite(36, HIGH);
-    digitalWrite(30, LOW);
-    delay(3);
-    SPI.begin();
-    LTC2484_read(5, 0x80, &rawadcvalue);
-    SPI.end();
-    delay(50);
-    digitalWrite(30, HIGH);
-
-    // Clear the ADC????
-    SPI.begin();
-    LTC2484_read(5, 0x80, &purgevalue);
-    SPI.end();
-
-    processedadcvalue = (uint32_t)(rawadcvalue & 0x1fffffe0);
-    processedadcvalue = processedadcvalue >> 5; // Might be shifting it to the left one too many bits (>> 4)
-
-    Serial.print("RED 1: ");
-    Serial.print("    ");
-    Serial.println(processedadcvalue, DEC);
-
-    message[0] = 'R';
-    message[1] = 'a';
-    message[2] = ',';
-    dtostrf(processedadcvalue, sizeof(processedadcvalue), 0, &message[3]);
-    Serial.println(message);
-    BTModu.sendData(message);
-    memset(&message[0], 0, sizeof(message));
-
-    delay(50);
-
-    rawadcvalue = 0;
-    processedadcvalue = 0;
-
-    delay(50);
-
-    digitalWrite(24, HIGH);
-    digitalWrite(25, LOW);
-    digitalWrite(26, HIGH);
-    digitalWrite(27, HIGH);
-
-    digitalWrite(30, LOW);
-    delay(3);
-    SPI.begin();
-    LTC2484_read(5, 0x80, &rawadcvalue);
-    SPI.end();
-    delay(50);
-    digitalWrite(30, HIGH);
-
-    SPI.begin();
-    LTC2484_read(5, 0x80, &purgevalue);
-    SPI.end();
-
-    rawadcvaluepart1 = (rawadcvalue & 0x1fffffe0);
-
-    processedadcvalue = (uint32_t)rawadcvaluepart1;
-
-    processedadcvalue = processedadcvalue >> 5;
-
-    Serial.print("GREEN 1: ");
-    Serial.print("    ");
-    Serial.println(processedadcvalue, DEC);
-
-    message[0] = 'G';
-    message[1] = 'a';
-    message[2] = ',';
-    dtostrf(processedadcvalue, sizeof(processedadcvalue), 0, &message[3]);
-    Serial.println(message);
-    BTModu.sendData(message);
-    memset(&message[0], 0, sizeof(message));
-
-    delay(50);
-
-    rawadcvalue = 0;
-    processedadcvalue = 0;
-
-    delay(50);
-
-    digitalWrite(24, LOW);
-    digitalWrite(25, LOW);
-    digitalWrite(26, HIGH);
-    digitalWrite(27, LOW);
-
-    digitalWrite(30, LOW);
-    delay(3);
-    SPI.begin();
-    LTC2484_read(5, 0x80, &rawadcvalue);
-    SPI.end();
-    delay(50);
-    digitalWrite(30, HIGH);
-    digitalWrite(36, LOW);
-
-    SPI.begin();
-    LTC2484_read(5, 0x80, &purgevalue);
-    SPI.end();
-
-    rawadcvaluepart1 = (rawadcvalue & 0x1fffffe0);
-
-    processedadcvalue = (uint32_t)rawadcvaluepart1;
-
-    processedadcvalue = processedadcvalue >> 5;
-
-    Serial.print("BLUE 1: ");
-    Serial.print("    ");
-    Serial.println(processedadcvalue, DEC);
-    Serial.println("    ");
-
-    message[0] = 'B';
-    message[1] = 'a';
-    message[2] = ',';
-    dtostrf(processedadcvalue, sizeof(processedadcvalue), 0, &message[3]);
-    Serial.println(message);
-    BTModu.sendData(message);
-    memset(&message[0], 0, sizeof(message));
-
-    delay(50);
-
-    rawadcvalue = 0;
-    processedadcvalue = 0;
+    for(Sensor& sensor : sensors) {
+      sensor.readRGB();
+    }
   }
-
   processReceivedData();
   chooseMode();  
 }
@@ -334,22 +209,29 @@ void setupBluetooth() {
   // We're set up to allow anything to connect to us now.
 }
 
+void setupSensors() {
+  char[12] names = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l'}
+  for(int i=0; i<12; i++) {
+    sensors[i](names[i], i);
+  }
+}
+
 void RETRACT() {// syringe makes a vacuum to pull water
   while(digitalRead(Limit2) == HIGH){
-  digitalWrite(in2, HIGH);
-  analogWrite(Enable, PWM);
-  Serial.println("Retracting");
+    digitalWrite(in2, HIGH);
+    analogWrite(Enable, PWM);
+    Serial.println("Retracting");
   }
   digitalWrite(in2, LOW);
   Serial.println("Retracted");
 }
 
 void RETURN() {// syringe returns to original position
-   while(digitalRead(Limit1)== HIGH){
-  digitalWrite(in1, HIGH);
-  analogWrite(Enable, PWM);
+  while(digitalRead(Limit1)== HIGH){
+    digitalWrite(in1, HIGH);
+    analogWrite(Enable, PWM);
     Serial.println("Returning");
-   }
+  }
   digitalWrite(in1, LOW);
   Serial.println("Returned");
 }
@@ -454,4 +336,3 @@ void chooseMode() {
   }
   //delay(100);
 }
-

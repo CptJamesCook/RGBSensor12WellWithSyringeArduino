@@ -1,6 +1,6 @@
 #include "Sensor.h"
 
-Sensor::Sensor(char _name, int num){
+Sensor::Sensor(char _name, int num) {
     name = _name;
 
     // Setup the MUX value. This value determines the MUX used to access the sensor.
@@ -89,22 +89,31 @@ Sensor::Sensor(char _name, int num){
     }
 }
 
-Sensor::readRGB(){
+Sensor::readRGB() {
     toggleLight();
     
-    readRed();
+    delay(3);
+    readColor('R');
     send('R');
-
-    readGreen();
+    delay(3);
+    
+    delay(3);
+    readColor('G');
     send('G');
-
-    readBlue();
+    delay(3);
+    
+    delay(3);
+    readColor('B');
     send('B');
+    delay(3);
 
     toggleLight();
+    
+    rawadcvalue = 0;
+    processedadcvalue = 0;
 }
 
-Sensor::toggleLight(){
+Sensor::toggleLight() {
     if(light.on) { // if light is on, turn it off
         light.on = false;
         digitalWrite(light.pin, LOW);
@@ -115,7 +124,7 @@ Sensor::toggleLight(){
     }
 }
 
-Sensor::toggleMux(){
+Sensor::toggleMux() {
     if(MUX.on){ // if mux is on, turn it off (note: mux is active low)
         MUX.on = false;
         digitalWrite(MUX.pin, HIGH);
@@ -126,132 +135,127 @@ Sensor::toggleMux(){
     }
 }
 
-// ##################################
-// Well 1
-// ##################################
-delay(50);
+Sensor::readColor(char color) {
+    switch(color){
+        case 'R':
+            setChannels(this.RGB.R);
+            break;
+        case 'G':
+            setChannels(this.RGB.G);
+            break;
+        case 'B':
+            setChannels(this.RGB.B);
+            break;
+        default:
+            break;
+    }
+    toggleMux();
+    delay(3);
+    getADCValue();
+    delay(3);
+    clearADC();
+    toggleMux();
+}
 
-digitalWrite(24, HIGH);
-digitalWrite(25, LOW);
-digitalWrite(26, HIGH);
-digitalWrite(27, LOW);
+Sensor::send(char color) {
+    message[0] = color;
+    message[1] = name;
+    message[2] = ',';
+    dtostrf(processedadcvalue, sizeof(processedadcvalue), 0, &message[3]);
+    Serial.println(message);
+    BTModu.sendData(message);
+    memset(&message[0], 0, sizeof(message)); // deletes message
+}
 
-digitalWrite(36, HIGH);
-digitalWrite(30, LOW);
-delay(3);
-SPI.begin();
-LTC2484_read(5, 0x80, &rawadcvalue);
-SPI.end();
-delay(50);
-digitalWrite(30, HIGH);
+Sensor::setChannels(int channels) { // There's probably a smarter way to do this...
+    switch(channels) {
+        case 0:
+            digitalWrite(CH2, LOW);
+            digitalWrite(CH3, LOW);
+            digitalWrite(CH1, LOW);
+            digitalWrite(CH0, LOW);
+            break;
+        case 1:
+            digitalWrite(CH2, LOW);
+            digitalWrite(CH3, LOW);
+            digitalWrite(CH1, LOW);
+            digitalWrite(CH0, HIGH);
+            break;
+        case 2:
+            digitalWrite(CH2, LOW);
+            digitalWrite(CH3, LOW);
+            digitalWrite(CH1, HIGH);
+            digitalWrite(CH0, LOW);
+            break;
+        case 3:
+            digitalWrite(CH2, LOW);
+            digitalWrite(CH3, LOW);
+            digitalWrite(CH1, HIGH);
+            digitalWrite(CH0, HIGH);
+            break;
+        case 4:
+            digitalWrite(CH2, LOW);
+            digitalWrite(CH3, HIGH);
+            digitalWrite(CH1, LOW);
+            digitalWrite(CH0, LOW);
+            break;
+        case 5:
+            digitalWrite(CH2, LOW);
+            digitalWrite(CH3, HIGH);
+            digitalWrite(CH1, LOW);
+            digitalWrite(CH0, HIGH);
+            break;
+        case 6:
+            digitalWrite(CH2, LOW);
+            digitalWrite(CH3, HIGH);
+            digitalWrite(CH1, HIGH);
+            digitalWrite(CH0, LOW);
+            break;
+        case 7:
+            digitalWrite(CH2, LOW);
+            digitalWrite(CH3, HIGH);
+            digitalWrite(CH1, HIGH);
+            digitalWrite(CH0, HIGH);
+            break;
+        case 8:
+            digitalWrite(CH2, HIGH);
+            digitalWrite(CH3, LOW);
+            digitalWrite(CH1, LOW);
+            digitalWrite(CH0, LOW);
+            break;
+        case 9:
+            digitalWrite(CH2, HIGH);
+            digitalWrite(CH3, LOW);
+            digitalWrite(CH1, LOW);
+            digitalWrite(CH0, HIGH);
+            break;
+        case 10:
+            digitalWrite(CH2, HIGH);
+            digitalWrite(CH3, LOW);
+            digitalWrite(CH1, HIGH);
+            digitalWrite(CH0, LOW);
+            break;
+        case 11:
+            digitalWrite(CH2, HIGH);
+            digitalWrite(CH3, LOW);
+            digitalWrite(CH1, HIGH);
+            digitalWrite(CH0, HIGH);
+            break;
+        default:
+            break;        
+    }
+}
 
-// Clear the ADC????
-SPI.begin();
-LTC2484_read(5, 0x80, &purgevalue);
-SPI.end();
+Sensor::getADCValue() {
+    SPI.begin();
+    LTC2484_read(5, 0x80, &rawadcvalue);
+    SPI.end();
+    processedadcvalue = (uint32_t)(rawadcvalue & 0x1fffffe0);
+    processedadcvalue = processedadcvalue >> 5; // Might be shifting it to the left one too many bits (>> 4)
+}
 
-processedadcvalue = (uint32_t)(rawadcvalue & 0x1fffffe0);
-processedadcvalue = processedadcvalue >> 5; // Might be shifting it to the left one too many bits (>> 4)
-
-Serial.print("RED 1: ");
-Serial.print("    ");
-Serial.println(processedadcvalue, DEC);
-
-message[0] = 'R';
-message[1] = 'a';
-message[2] = ',';
-dtostrf(processedadcvalue, sizeof(processedadcvalue), 0, &message[3]);
-Serial.println(message);
-BTModu.sendData(message);
-memset(&message[0], 0, sizeof(message));
-
-delay(50);
-
-rawadcvalue = 0;
-processedadcvalue = 0;
-
-delay(50);
-
-digitalWrite(24, HIGH);
-digitalWrite(25, LOW);
-digitalWrite(26, HIGH);
-digitalWrite(27, HIGH);
-
-digitalWrite(30, LOW);
-delay(3);
-SPI.begin();
-LTC2484_read(5, 0x80, &rawadcvalue);
-SPI.end();
-delay(50);
-digitalWrite(30, HIGH);
-
-SPI.begin();
-LTC2484_read(5, 0x80, &purgevalue);
-SPI.end();
-
-rawadcvaluepart1 = (rawadcvalue & 0x1fffffe0);
-
-processedadcvalue = (uint32_t)rawadcvaluepart1;
-
-processedadcvalue = processedadcvalue >> 5;
-
-Serial.print("GREEN 1: ");
-Serial.print("    ");
-Serial.println(processedadcvalue, DEC);
-
-message[0] = 'G';
-message[1] = 'a';
-message[2] = ',';
-dtostrf(processedadcvalue, sizeof(processedadcvalue), 0, &message[3]);
-Serial.println(message);
-BTModu.sendData(message);
-memset(&message[0], 0, sizeof(message));
-
-delay(50);
-
-rawadcvalue = 0;
-processedadcvalue = 0;
-
-delay(50);
-
-digitalWrite(24, LOW);
-digitalWrite(25, LOW);
-digitalWrite(26, HIGH);
-digitalWrite(27, LOW);
-
-digitalWrite(30, LOW);
-delay(3);
-SPI.begin();
-LTC2484_read(5, 0x80, &rawadcvalue);
-SPI.end();
-delay(50);
-digitalWrite(30, HIGH);
-digitalWrite(36, LOW);
-
-SPI.begin();
-LTC2484_read(5, 0x80, &purgevalue);
-SPI.end();
-
-rawadcvaluepart1 = (rawadcvalue & 0x1fffffe0);
-
-processedadcvalue = (uint32_t)rawadcvaluepart1;
-
-processedadcvalue = processedadcvalue >> 5;
-
-Serial.print("BLUE 1: ");
-Serial.print("    ");
-Serial.println(processedadcvalue, DEC);
-Serial.println("    ");
-
-message[0] = 'B';
-message[1] = 'a';
-message[2] = ',';
-dtostrf(processedadcvalue, sizeof(processedadcvalue), 0, &message[3]);
-Serial.println(message);
-BTModu.sendData(message);
-memset(&message[0], 0, sizeof(message));
-
-delay(50);
-
-rawadcvalue = 0;
-processedadcvalue = 0;
+Sensor::clearADC() {
+    SPI.begin();
+    LTC2484_read(5, 0x80, &purgevalue);
+    SPI.end();
+}

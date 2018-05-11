@@ -10,12 +10,12 @@ class Sensor{
     private:
         void toggleLight();
         void toggleMux();
-        void readRed();
-        void readGreen();
-        void readBlue();
+        void readColor(char color);
         void send(char color);
         void setChannels(int num);
-
+        void getADCValue();
+        void clearADC();
+        
         char name;
         char message[LENGTH];
         
