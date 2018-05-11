@@ -9,6 +9,9 @@ BLEMate2 BTModu(&bluetoothSerial);
 
 Sensor sensors[12];
 
+// mode
+byte mode;
+
 void setup() {
   // We initialize serial communication, setup the SPI pins and lighting/power pins as outputs, and initialize the lights to OFF
   Serial.begin(9600);
@@ -33,13 +36,15 @@ void setup() {
   setupSensors();
 
   runSensors = false;
+  
+  mode = 0;
 }
 
 void loop() {
   if (runSensors) { // Should eventually become while loop with a check to see if runSensors becomes false
     Serial.println("Running Sensors");
     for(Sensor& sensor : sensors) {
-      sensor.readRGB();
+      sensor.readRGB(BTModu);
     }
   }
   processReceivedData();
@@ -210,9 +215,9 @@ void setupBluetooth() {
 }
 
 void setupSensors() {
-  char[12] names = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l'}
+  char names[12] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l'};
   for(int i=0; i<12; i++) {
-    sensors[i](names[i], i);
+    sensors[i].setup(names[i], i);
   }
 }
 

@@ -1,45 +1,49 @@
 #include "Sensor.h"
 
-Sensor::Sensor(char _name, int num) {
+Sensor::Sensor() {
+  // do nothing
+}
+
+void Sensor::setup(char _name, int num) {
     name = _name;
 
     // Setup the MUX value. This value determines the MUX used to access the sensor.
-    this.MUX.on = false;
+    mux.on = false;
     if((num == 0) || (num == 1) || (num == 2) || (num == 3)) {
-        this.MUX.pin = MUX3;
+        mux.pin = MUX3;
     }
 
     else if((num == 4) || (num == 5) || (num == 6) || (num == 7)) {
-        this.MUX.pin = MUX2;
+        mux.pin = MUX2;
     }
     
     else if ((num == 8) || (num == 9) || (num == 10) || (num == 11)) {
-        this.MUX.pin = MUX1;
+        mux.pin = MUX1;
     }
 
     // Setup the RGB values. These values map how to set up the channel to access the proper RGB sensor.
     if((num == 0) || (num==4) || (num==8)) {
-        this.RBG.R = 10;
-        this.RBG.G = 11;
-        this.RBG.B = 2;
+        rgb.R = 10;
+        rgb.G = 11;
+        rgb.B = 2;
     }
 
     else if ((num == 1) || (num == 5) || (num == 9)) {
-        this.RBG.R = 1;
-        this.RBG.G = 0;
-        this.RBG.B = 5;
+        rgb.R = 1;
+        rgb.G = 0;
+        rgb.B = 5;
     }
 
     else if ((num == 2) || (num == 6) || (num == 10)) {
-        this.RBG.R = 4;
-        this.RBG.G = 3;
-        this.RBG.B = 8;
+        rgb.R = 4;
+        rgb.G = 3;
+        rgb.B = 8;
     }
     
     else if ((num == 3) || (num == 7) || (num == 11)) {
-        this.RBG.R = 7;
-        this.RBG.G = 6;
-        this.RBG.B = 9;
+        rgb.R = 7;
+        rgb.G = 6;
+        rgb.B = 9;
     }
 
     else {// do nothing
@@ -49,62 +53,62 @@ Sensor::Sensor(char _name, int num) {
     light.on = false;
     switch(num){
         case 0:
-            ligth.pin = LED0;
+            light.pin = LED0;
             break;
         case 1:
-            ligth.pin = LED1;
+            light.pin = LED1;
             break;
         case 2:
-            ligth.pin = LED2;
+            light.pin = LED2;
             break;
         case 3:
-            ligth.pin = LED3;
+            light.pin = LED3;
             break;
         case 4:
-            ligth.pin = LED4;
+            light.pin = LED4;
             break;
         case 5:
-            ligth.pin = LED5;
+            light.pin = LED5;
             break;
         case 6:
-            ligth.pin = LED6;
+            light.pin = LED6;
             break;
         case 7:
-            ligth.pin = LED7;
+            light.pin = LED7;
             break;
         case 8:
-            ligth.pin = LED8;
+            light.pin = LED8;
             break;
         case 9:
-            ligth.pin = LED9;
+            light.pin = LED9;
             break;
         case 10:
-            ligth.pin = LED10;
+            light.pin = LED10;
             break;
         case 11:
-            ligth.pin = LED11;
+            light.pin = LED11;
             break;
         default:
             break;
     }
 }
 
-Sensor::readRGB() {
+void Sensor::readRGB(BLEMate2 BTModu) {
     toggleLight();
     
     delay(3);
     readColor('R');
-    send('R');
+    send('R', BTModu);
     delay(3);
     
     delay(3);
     readColor('G');
-    send('G');
+    send('G', BTModu);
     delay(3);
     
     delay(3);
     readColor('B');
-    send('B');
+    send('B', BTModu);
     delay(3);
 
     toggleLight();
@@ -113,7 +117,7 @@ Sensor::readRGB() {
     processedadcvalue = 0;
 }
 
-Sensor::toggleLight() {
+void Sensor::toggleLight() {
     if(light.on) { // if light is on, turn it off
         light.on = false;
         digitalWrite(light.pin, LOW);
@@ -124,27 +128,27 @@ Sensor::toggleLight() {
     }
 }
 
-Sensor::toggleMux() {
-    if(MUX.on){ // if mux is on, turn it off (note: mux is active low)
-        MUX.on = false;
-        digitalWrite(MUX.pin, HIGH);
+void Sensor::toggleMux() {
+    if(mux.on){ // if mux is on, turn it off (note: mux is active low)
+        mux.on = false;
+        digitalWrite(mux.pin, HIGH);
     }
     else { // Otherwise, turn it on
-        MUX.on = true;
-        digitalWrite(MUX.pin, LOW);
+        mux.on = true;
+        digitalWrite(mux.pin, LOW);
     }
 }
 
-Sensor::readColor(char color) {
+void Sensor::readColor(char color) {
     switch(color){
         case 'R':
-            setChannels(this.RGB.R);
+            setChannels(rgb.R);
             break;
         case 'G':
-            setChannels(this.RGB.G);
+            setChannels(rgb.G);
             break;
         case 'B':
-            setChannels(this.RGB.B);
+            setChannels(rgb.B);
             break;
         default:
             break;
@@ -157,7 +161,7 @@ Sensor::readColor(char color) {
     toggleMux();
 }
 
-Sensor::send(char color) {
+void Sensor::send(char color, BLEMate2 BTModu) {
     message[0] = color;
     message[1] = name;
     message[2] = ',';
@@ -167,7 +171,7 @@ Sensor::send(char color) {
     memset(&message[0], 0, sizeof(message)); // deletes message
 }
 
-Sensor::setChannels(int channels) { // There's probably a smarter way to do this...
+void Sensor::setChannels(int channels) { // There's probably a smarter way to do this...
     switch(channels) {
         case 0:
             digitalWrite(CH2, LOW);
@@ -246,7 +250,7 @@ Sensor::setChannels(int channels) { // There's probably a smarter way to do this
     }
 }
 
-Sensor::getADCValue() {
+void Sensor::getADCValue() {
     SPI.begin();
     LTC2484_read(5, 0x80, &rawadcvalue);
     SPI.end();
@@ -254,7 +258,7 @@ Sensor::getADCValue() {
     processedadcvalue = processedadcvalue >> 5; // Might be shifting it to the left one too many bits (>> 4)
 }
 
-Sensor::clearADC() {
+void Sensor::clearADC() {
     SPI.begin();
     LTC2484_read(5, 0x80, &purgevalue);
     SPI.end();

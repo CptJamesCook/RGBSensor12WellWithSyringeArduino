@@ -47,12 +47,4 @@
 #define LED10 38
 #define LED11 37
 
-// mode
-byte mode = 0;
-
-// used to read adc values
-int32_t rawadcvalue;
-int32_t purgevalue;
-uint32_t processedadcvalue;
-
 #endif // SETTINGS_H
