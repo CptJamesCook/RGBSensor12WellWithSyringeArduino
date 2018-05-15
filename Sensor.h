@@ -7,6 +7,7 @@ class Sensor{
         Sensor();
         void setup(char _name, int num);
         void readRGB(BLEMate2 BTModu);
+        char getName();
         
     private:
         void toggleLight();

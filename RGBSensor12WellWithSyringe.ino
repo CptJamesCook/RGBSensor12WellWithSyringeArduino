@@ -9,8 +9,9 @@ BLEMate2 BTModu(&bluetoothSerial);
 
 Sensor sensors[12];
 
-// mode
-byte mode;
+static String fullBuffer = "";
+static long lastRXTime = millis();
+static String inputBuffer;
 
 void setup() {
   // We initialize serial communication, setup the SPI pins and lighting/power pins as outputs, and initialize the lights to OFF
@@ -18,37 +19,56 @@ void setup() {
   bluetoothSerial.begin(9600);
   
   // Process to setup the pins that go to the light detector
+  Serial.println("Setup Detector pins...");
   setupLightDetectorPins();
 
   // Process to setup the pins that control the lights
+  Serial.println("Setup Light pins...");
   setupLightPins();
 
   // Process to setup the pump
+  Serial.println("Setup Pump...");
   setupPump();
 
   // Process to setup bluetooth
+  Serial.println("Setup Bluetooth...");
   setupBluetooth();
   
   // initialize the SPI
+  Serial.println("Initialize SPI...");
   SPI.beginTransaction(SPISettings(4000000, MSBFIRST, SPI_MODE0));
 
   // Process to setup the sensors
+  Serial.println("Setup sensors...");
   setupSensors();
 
   runSensors = false;
-  
-  mode = 0;
 }
 
 void loop() {
+  // Since I'm going to be reporting strings back over serial to the PC, I want
+  //  to make sure that I'm (probably) not going to be looking away from the BLE
+  //  device during a data receive period. I'll *guess* that, if more than 1000
+  //  milliseconds has elapsed since my last receive, that I'm in a quiet zone
+  //  and I can switch over to the PC to report what I've heard.
+  
+  if (lastRXTime + 1000 < millis())
+  {
+    if (fullBuffer != "")
+    {
+      Serial.println(fullBuffer);
+      fullBuffer = "";
+    }
+  }
+  processReceivedData2();
+  
   if (runSensors) { // Should eventually become while loop with a check to see if runSensors becomes false
     Serial.println("Running Sensors");
     for(Sensor& sensor : sensors) {
       sensor.readRGB(BTModu);
     }
   }
-  processReceivedData();
-  chooseMode();  
+  // processReceivedData();
 }
 
 void setupLightDetectorPins() {
@@ -216,9 +236,13 @@ void setupBluetooth() {
 
 void setupSensors() {
   char names[12] = {'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 'j', 'k', 'l'};
+  Serial.println("Setting up detector pins: ");
+  Serial.print("\t");
   for(int i=0; i<12; i++) {
     sensors[i].setup(names[i], i);
+    Serial.print(sensors[i].getName());
   }
+  Serial.println();
 }
 
 void RETRACT() {// syringe makes a vacuum to pull water
@@ -247,14 +271,27 @@ void processReceivedData() {
 
   // buffer for bluetooth Data
   static uint8_t inputBuffer[LENGTH];
+  
+  byte mode = 0;
 
   //RCV buffer index pointer
   static uint8_t iFullBuffer = 0;
 
   // bluetooth Serail buffer index pointer
   static uint8_t iInputBuffer = 0;
+  
+  //I dunno what this does...
+  uint8_t electrode;
 
   static long lastRXTime = millis();
+  
+  // I dunno what this does either...
+  // use union to convert byte array to uint32_t
+  union fourByte {
+    uint32_t dataFrequency;
+    uint8_t dataByte[4];
+  };
+  union fourByte dataVal;
 
   // if more than 1000
   // milliseconds has elapsed since last receive
@@ -313,26 +350,70 @@ void processReceivedData() {
       iInputBuffer = 0;
     }
   }
+  chooseMode(mode);
 }
 
-void chooseMode() {
+processReceivedData2() {
+  // This is the peripheral example code.
+
+    // When a remote module connects to us, we'll start to see a bunch of stuff.
+    //  Most of that is just overhead; we don't really care about it. All we
+    //  *really* care about is data, and data looks like this:
+    // RCV=20 char max msg\n\r
+
+    // The state machine for capturing that can be pretty easy: when we've read
+    //  in \n\r, check to see if the string began with "RCV=". If yes, do
+    //  something. If no, discard it.
+    while (bluetoothSerial.available() > 0)
+    {
+      inputBuffer.concat((char)bluetoothSerial.read());
+      lastRXTime = millis();
+    }
+
+    // We'll probably see a lot of lines that end with \n\r- that's the default
+    //  line ending for all the connect info messages, for instance. We can
+    //  ignore all of them that don't start with "RCV=". Remember to clear your
+    //  String object after you find \n\r!!!
+    if (inputBuffer.endsWith("\n\r"))
+    {
+      if (inputBuffer.startsWith("RCV="))
+      {
+        inputBuffer.trim(); // Remove \n\r from end.
+        inputBuffer.remove(0,4); // Remove RCV= from front.
+        fullBuffer += inputBuffer;
+        inputBuffer = "";
+      }
+      else
+      {
+        inputBuffer = "";
+      }
+    }
+}
+
+void chooseMode(byte mode) {
+  Serial.print("Mode: ");
+  Serial.println(mode);
   switch (mode)
   {
   case 66: // For beginning the stream (ASCII B)
+    Serial.println("Begin Running the sensors.");
     runSensors = true;
     mode = 0;
     break;
 
   case 83: // For stopping the stream (ASCII S)
+    Serial.println("Stop Running the sensors.");
     runSensors = false;
     mode = 0;
     break;
 
   case 77: // For retracting the syringe pump (ASCII M)
+    Serial.println("Retract pump.");
     RETRACT();
     break;
 
   case 79: // For returning the syringe pump (ASCII O)
+    Serial.println("Return pump.");
     RETURN();
     break;
 

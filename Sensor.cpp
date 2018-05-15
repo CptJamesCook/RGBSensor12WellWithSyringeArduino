@@ -117,6 +117,10 @@ void Sensor::readRGB(BLEMate2 BTModu) {
     processedadcvalue = 0;
 }
 
+char Sensor::getName() {
+  return name;
+}
+
 void Sensor::toggleLight() {
     if(light.on) { // if light is on, turn it off
         light.on = false;
